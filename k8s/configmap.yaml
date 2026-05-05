@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: portfolio-api-config
+  namespace: default
+  labels:
+    app: portfolio-api
+    version: "1.0.0"
+data:
+  # Database connection (non-secret parts)
+  DB_URL: "jdbc:postgresql://postgres-service:5432/portfolio"
+  DB_USERNAME: "portfolio_user"
+
+  # Mailer
+  MAILER_HOST: "smtp.gmail.com"
+  MAILER_PORT: "587"
+  MAILER_USERNAME: "puanputrisaqinahf@gmail.com"
+  MAILER_FROM: "no-reply@puanputri.dev"
+  MAILER_SSL: "false"
+  MAILER_STARTTLS: "REQUIRED"
+  CONTACT_NOTIFICATION_EMAIL: "puanputrisaqinahf@gmail.com"
+
+  # Logging
+  LOG_LEVEL: "INFO"
+
+  # CORS
+  CORS_ORIGINS: "https://puanputri.dev,https://www.puanputri.dev"

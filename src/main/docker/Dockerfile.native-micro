@@ -1,0 +1,46 @@
+# ---------------------------------------------------------------------------
+# Multi-stage native Dockerfile for portfolio-api (~50 MB final image)
+# Stage 1: Build native binary with Mandrel / GraalVM
+# Stage 2: Minimal quarkus-micro-image runtime
+# ---------------------------------------------------------------------------
+
+# ── Stage 1: Native image build ──────────────────────────────────────────────
+FROM quay.io/quarkus/ubi-quarkus-mandrel-builder-image:jdk-21 AS native-builder
+
+USER root
+WORKDIR /build
+
+# Copy Maven wrapper and POM first for better layer caching
+COPY --chown=quarkus:quarkus mvnw .
+COPY --chown=quarkus:quarkus .mvn .mvn
+COPY --chown=quarkus:quarkus pom.xml .
+
+USER quarkus
+
+# Download dependencies (cached unless pom.xml changes)
+RUN ./mvnw dependency:go-offline -B -q
+
+# Copy source
+COPY --chown=quarkus:quarkus src src
+
+# Build the native executable
+RUN ./mvnw package -Pnative -DskipTests -B -q
+
+# ── Stage 2: Minimal micro runtime ───────────────────────────────────────────
+FROM quay.io/quarkus/quarkus-micro-image:2.0 AS runtime
+
+LABEL org.opencontainers.image.title="portfolio-api (native)" \
+      org.opencontainers.image.description="Quarkus native backend for Puan Putri developer portfolio" \
+      org.opencontainers.image.source="https://github.com/puanputri/portfolio-api"
+
+WORKDIR /work/
+
+# Copy the native binary from the builder
+COPY --from=native-builder /build/target/*-runner /work/application
+
+# Ensure the binary is executable
+RUN chmod 775 /work/application
+
+EXPOSE 8080
+
+CMD ["./application", "-Dquarkus.http.host=0.0.0.0"]

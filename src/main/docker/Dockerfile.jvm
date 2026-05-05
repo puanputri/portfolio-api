@@ -1,0 +1,47 @@
+# ---------------------------------------------------------------------------
+# Multi-stage JVM Dockerfile for portfolio-api
+# Stage 1: Build with Maven
+# Stage 2: Run with eclipse-temurin:21-jre-alpine
+# ---------------------------------------------------------------------------
+
+# ── Stage 1: Build ──────────────────────────────────────────────────────────
+FROM eclipse-temurin:21-jdk-alpine AS builder
+
+WORKDIR /build
+
+# Copy Maven wrapper and POM first for better layer caching
+COPY .mvn/ .mvn/
+COPY mvnw pom.xml ./
+
+# Download dependencies (cached unless pom.xml changes)
+RUN ./mvnw dependency:go-offline -B -q
+
+# Copy source and build
+COPY src/ src/
+RUN ./mvnw package -DskipTests -B -q
+
+# ── Stage 2: Runtime ─────────────────────────────────────────────────────────
+FROM eclipse-temurin:21-jre-alpine AS runtime
+
+LABEL org.opencontainers.image.title="portfolio-api" \
+      org.opencontainers.image.description="Quarkus backend for Puan Putri developer portfolio" \
+      org.opencontainers.image.source="https://github.com/puanputri/portfolio-api"
+
+# Create a non-root user
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
+WORKDIR /app
+
+# Copy the Quarkus fast-jar from the build stage
+COPY --from=builder --chown=appuser:appgroup /build/target/quarkus-app/lib/ lib/
+COPY --from=builder --chown=appuser:appgroup /build/target/quarkus-app/*.jar .
+COPY --from=builder --chown=appuser:appgroup /build/target/quarkus-app/app/ app/
+COPY --from=builder --chown=appuser:appgroup /build/target/quarkus-app/quarkus/ quarkus/
+
+USER appuser
+
+EXPOSE 8080
+
+ENV JAVA_OPTS_APPEND="-Dquarkus.http.host=0.0.0.0 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
+
+ENTRYPOINT ["java", "-jar", "-Dquarkus.http.host=0.0.0.0", "-Djava.util.logging.manager=org.jboss.logmanager.LogManager", "quarkus-run.jar"]
